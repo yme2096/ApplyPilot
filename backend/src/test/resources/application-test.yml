@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=true;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.H2Dialect
+    open-in-view: false
+    properties:
+      hibernate.globally_quoted_identifiers: false
+  flyway:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+  mail:
+    host: ""
+    username: ""
+    password: ""
+app:
+  jwt-secret: test-secret-key-32-bytes-minimum-xxxx
+  access-minutes: 15
+  upload-dir: /tmp/applypilot-test-uploads
+  worker-url: http://localhost:9999
+  origin: http://localhost:5173
+  rate-limit:
+    enabled: false

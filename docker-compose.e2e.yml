@@ -1,0 +1,73 @@
+name: applypilot-e2e
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: applypilot_e2e
+      POSTGRES_USER: e2e_user
+      POSTGRES_PASSWORD: e2e-local-only-not-for-production
+    ports: ["127.0.0.1:55433:5432"]
+    volumes: ["e2e_postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U e2e_user -d applypilot_e2e"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:56379:6379"]
+    volumes: ["e2e_redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  document-worker:
+    build: ./worker
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/applypilot_e2e
+      POSTGRES_USER: e2e_user
+      POSTGRES_PASSWORD: e2e-local-only-not-for-production
+      REDIS_HOST: redis
+      JWT_SECRET: e2e-only-jwt-secret-not-for-production-0123456789abcdef
+      APP_ORIGIN: http://localhost:15174
+      UPLOAD_DIR: /app/data/uploads
+      WORKER_URL: http://document-worker:8000
+      SERVER_PORT: 8080
+      LLM_PROVIDER: none
+      APP_RATE_LIMIT_AUTH_MAX: 1000
+      APP_RATE_LIMIT_IMPORT_MAX: 1000
+    ports: ["127.0.0.1:18081:8080"]
+    volumes: ["e2e_resume_data:/app/data/uploads"]
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "ai.applypilot.config.HealthProbe"]
+      interval: 10s
+      timeout: 6s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      document-worker: {condition: service_healthy}
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    ports: ["127.0.0.1:15174:80"]
+    depends_on: [api]
+volumes:
+  e2e_postgres_data:
+    name: applypilot-e2e-postgres-data
+  e2e_redis_data:
+    name: applypilot-e2e-redis-data
+  e2e_resume_data:
+    name: applypilot-e2e-resume-data

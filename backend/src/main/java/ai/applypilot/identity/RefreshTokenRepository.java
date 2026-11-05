@@ -1,0 +1,3 @@
+package ai.applypilot.identity;
+import org.springframework.data.jpa.repository.JpaRepository; import java.util.*;
+public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity,UUID>{Optional<RefreshTokenEntity> findByTokenHash(String hash);@org.springframework.data.jpa.repository.Modifying @org.springframework.data.jpa.repository.Query("update RefreshTokenEntity r set r.revokedAt=:at where r.user.id=:userId and r.revokedAt is null") int revokeAllForUser(@org.springframework.data.repository.query.Param("userId") UUID userId,@org.springframework.data.repository.query.Param("at") java.time.Instant at);}

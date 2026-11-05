@@ -1,0 +1,4 @@
+# Temporary, narrowly scoped risk acceptances; details and review conditions are in SECURITY.md.
+# The complete machine-readable report is always generated without this file.
+CVE-2026-47884 exp:2027-02-01
+CVE-2026-47890 exp:2027-02-01

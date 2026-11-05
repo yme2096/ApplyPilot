@@ -1,0 +1,56 @@
+spring:
+  mail:
+    host: ${SPRING_MAIL_HOST:}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SPRING_MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${SPRING_MAIL_STARTTLS:true}
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  application:
+    name: applypilot-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/applypilot}
+    username: ${POSTGRES_USER:applypilot}
+    password: ${POSTGRES_PASSWORD:}
+    hikari:
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:1000}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_COMMAND_TIMEOUT:2s}
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 8MB
+server:
+  port: ${SERVER_PORT:8081}
+  error:
+    include-message: never
+app:
+  jwt-secret: ${JWT_SECRET:}
+  access-minutes: ${JWT_ACCESS_MINUTES:15}
+  upload-dir: ${UPLOAD_DIR:./data/uploads}
+  worker-url: ${WORKER_URL:http://localhost:8000}
+  origin: ${APP_ORIGIN:http://localhost:5173}
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    auth-max: ${APP_RATE_LIMIT_AUTH_MAX:20}
+    import-max: ${APP_RATE_LIMIT_IMPORT_MAX:30}
+    window-seconds: ${APP_RATE_LIMIT_WINDOW_SECONDS:60}
+  ai:
+    provider: ${LLM_PROVIDER:none}
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    model: ${OLLAMA_MODEL:qwen2.5:3b}
+    timeout-ms: ${LLM_TIMEOUT_MS:30000}

@@ -1,0 +1,26 @@
+# Security
+
+- Secrets come from environment configuration; never commit real credentials.
+- Passwords use BCrypt. Access tokens are short lived; refresh tokens are stored as hashes and rotated/revoked.
+- Password reset tokens are single use, short lived, stored as hashes, and revoke active refresh tokens after a successful reset. Requests use a generic response to avoid revealing whether an email is registered. SMTP must be configured before reset requests can be sent; missing configuration returns a controlled `503`.
+- Resource access is scoped to the authenticated owner.
+- Uploads require an allowlisted extension, validated MIME/content, and size limits. Store files outside public web roots.
+- Never log passwords, tokens, resume contents, or sensitive answers.
+- The extension uses explicit host permissions and never interacts with CAPTCHA or final submission controls.
+- Public login, registration, password-reset request, expensive job ingestion, and AI answer-draft routes use configurable fixed-window Redis rate limits. Defaults are 20 authentication, 30 ingestion, and 10 AI requests per direct client address per 60 seconds. `APP_RATE_LIMIT_AUTH_MAX`, `APP_RATE_LIMIT_IMPORT_MAX`, `APP_RATE_LIMIT_AI_MAX`, and `APP_RATE_LIMIT_WINDOW_SECONDS` configure the values. Forwarding headers are ignored. Redis connect/command timeouts are 2 seconds; missing or unavailable Redis fails closed with HTTP 503 and `Retry-After: 5`. Isolated runtime outage check returned 503 in about 2 seconds.
+- The web server adds a restrictive Content Security Policy and browser security headers. Inline style attributes remain allowed for current chart sizing; stylesheet/font access is limited to the explicitly used Google Fonts hosts. API requests use the same-origin `/api` proxy. Headless browser E2E asserted the policy and observed no CSP violations; production domains still need a policy review.
+- Local web access/refresh tokens are stored in `sessionStorage`, cleared on expiry/logout, and verified by headless authenticated E2E tests; this reduces persistence after the tab closes but does not mitigate XSS. Password-reset links use the URL fragment (`/#resetToken=...`) and remove it after successful reset; browser end-to-end reset-email receipt was not tested. Extension token flow is unchanged and its Chrome session remains NOT TESTED.
+- Frontend and extension `npm audit` previously reported zero advisories. The initial OWASP Dependency-Check attempt did not finish its NVD update. A completed alternative scan now uses Trivy 0.76.1 against a 122-component CycloneDX SBOM including test dependencies. The full, unfiltered report contains two Spring Framework findings; they are documented, narrowly scoped, and expire 2027-02-01. There are no remaining Trivy HIGH findings, but the scan is not clean and the accepted CVE-2026-47884 is still a critical library finding. See [BACKEND_DEPENDENCY_AUDIT.md](BACKEND_DEPENDENCY_AUDIT.md) and the ignored local `security-reports/` outputs.
+- The anonymous `/api/health` readiness endpoint checks PostgreSQL, Redis, and the document worker and returns only `UP`/`DOWN`. Its isolated PostgreSQL-outage response was bounded at about 3 seconds. Compose uses it for the API healthcheck.
+- A custom-format backup was restored into a separate PostgreSQL instance. Flyway V11 and row counts matched (users 40, jobs 109, resumes 20, applications 6); resume files remain a separate volume dependency. This is a database restore drill, not a full document-volume recovery drill.
+- Production still requires strong unique secrets, HTTPS, restrictive CORS, private service networking, monitoring, encrypted off-host backups, and tested full document-volume recovery. No penetration test or production load test was performed.
+
+Security controls remain under implementation. The Phase 5 review is documented in `PHASE5_READINESS_AUDIT.md`; it is not a penetration test. ApplyPilot is not production-ready.
+
+## Backend Maven dependency scan (2026-11-03)
+
+- **PASS:** Trivy 0.76.1 completed against a Maven CycloneDX 1.6 SBOM (122 compile/runtime/test components). Full JSON report has 2 findings: CVE-2026-47884 and CVE-2026-47890 in transitive `spring-webmvc` 6.2.19. Trivy marks both CRITICAL; the Spring vendor rates CVE-2026-47890 LOW. No other findings remain after compatible dependency updates.
+- **IMPLEMENTED:** Backend upgraded to Spring Boot 3.5.16 / Java 21 and compatible Jackson, Log4j, Netty, PostgreSQL JDBC and Tomcat patched versions. The full scan report remains unfiltered under ignored `security-reports/`.
+- **ACCEPTED RISK:** Both remaining Spring advisories require features not present in ApplyPilot's REST-only code. No safe free Spring Boot 3.x patch for these findings was identified; Trivy exceptions expire 2027-02-01 and the raw report still contains the CVEs. The CI policy fails on other HIGH/CRITICAL findings.
+- **IMPLEMENTED:** GitHub Actions now tests the backend, generates the all-scope SBOM, checksum-verifies pinned Trivy, stores machine-readable JSON as an artifact, and enforces the documented HIGH/CRITICAL policy without an API key or paid scanner.
+- ApplyPilot remains **NOT production-ready**; the dependency scan does not substitute for penetration testing or deployment review.

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ApplyPilot Assistant</title>
+  <style>
+    body {
+      width: 330px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #1e293b;
+      background: #f8fafc;
+    }
+    .header {
+      padding: 12px 16px;
+      background: #1e293b;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header b {
+      font-size: 14px;
+      letter-spacing: -0.3px;
+    }
+    .content {
+      padding: 16px;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e2e8f0;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+    .status-badge.detected {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .button {
+      width: 100%;
+      height: 36px;
+      background: #2563eb;
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .button:hover {
+      background: #1d4ed8;
+    }
+    .button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    .button.outline {
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      color: #475569;
+      height: 28px;
+      font-size: 11px;
+    }
+    .input-field {
+      width: 100%;
+      box-sizing: border-box;
+      height: 32px;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      padding: 0 8px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .disclaimer {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 12px;
+      text-align: center;
+      line-height: 1.4;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 10px;
+    }
+    .review-check { display:flex; gap:7px; align-items:flex-start; font-size:10px; line-height:1.4; margin:8px 0; color:#475569; }
+    .review-check input { margin:1px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <b>ApplyPilot Assistant</b>
+    <span style="font-size: 11px; color: #94a3b8;">Phase 3</span>
+  </div>
+
+  <div class="content">
+    <!-- Auth Required Section -->
+    <div id="auth-section" style="display: none;">
+      <div class="card">
+        <div style="font-weight: 700; margin-bottom: 6px; font-size: 13px;">Sign In to ApplyPilot</div>
+        <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;">Connect with your local ApplyPilot candidate account. Your session ends when this browser session closes.</div>
+        <form id="login-form">
+          <input type="email" id="login-email" class="input-field" placeholder="you@example.com" required />
+          <input type="password" id="login-pass" class="input-field" placeholder="Password" required />
+          <button type="submit" class="button">Connect Workspace</button>
+        </form>
+        <div id="login-error" style="color: #dc2626; font-size: 11px; margin-top: 8px;"></div>
+      </div>
+    </div>
+
+    <!-- Main Workspace Section -->
+    <div id="main-section" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <span style="font-size: 11px; color: #475569;">Signed in as <strong id="user-email"></strong></span>
+        <button id="logout-btn" class="button outline" style="width: auto; padding: 0 8px;">Sign Out</button>
+      </div>
+
+      <div id="ats-badge" class="status-badge">Detecting career form...</div>
+
+      <div class="card">
+        <div style="font-weight: 700; font-size: 13px; margin-bottom: 4px;" id="job-title">Scanning page...</div>
+        <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;" id="ats-info">Checking ATS format...</div>
+
+        <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 4px; color: #334155;">Active Application Bundle</label>
+        <select id="bundle-select" class="input-field">
+          <option value="">-- Select a READY application bundle --</option>
+        </select>
+
+        <div id="resume-review-info" style="font-size:10px;color:#64748b;margin:4px 0;"></div>
+        <label class="review-check"><input id="resume-approved" type="checkbox" />I reviewed and approve the selected resume version. Attach this exact version to the detected resume field.</label>
+        <label class="review-check"><input id="legal-confirmed" type="checkbox" />I will personally confirm any legal, work-authorization, sponsorship, or declaration answers before they are filled.</label>
+
+        <button id="autofill-btn" class="button" disabled>Prepare fields for final review</button>
+        <button id="attach-resume-btn" class="button outline" disabled style="width:100%;margin-top:8px;height:34px">Attach approved resume version</button>
+        <label class="review-check" style="margin-top:12px"><input id="submitted-confirmed" type="checkbox" />I manually submitted this application on the employer's website.</label>
+        <button id="submitted-btn" class="button outline" disabled>Record candidate-confirmed submission</button>
+      </div>
+
+      <div id="feedback" style="font-size: 11px; margin-top: 6px;"></div>
+
+      <div class="disclaimer">
+        <strong>Candidate Control Guarantee:</strong> ApplyPilot populates verified details and highlights uncertain fields. The final review and application submission are always completed manually by you.
+      </div>
+    </div>
+  </div>
+
+  <script src="dist/popup.js"></script>
+</body>
+</html>

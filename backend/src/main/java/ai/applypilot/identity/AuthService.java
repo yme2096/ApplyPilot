@@ -1,0 +1,14 @@
+package ai.applypilot.identity;
+import ai.applypilot.security.JwtService; import org.springframework.http.HttpStatus; import org.springframework.security.crypto.password.PasswordEncoder; import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional; import org.springframework.web.server.ResponseStatusException;
+import java.nio.charset.StandardCharsets; import java.security.MessageDigest; import java.security.SecureRandom; import java.time.Instant; import java.time.temporal.ChronoUnit; import java.util.Base64;
+@Service public class AuthService {
+ private final UserRepository users; private final RefreshTokenRepository refresh; private final PasswordEncoder passwords; private final JwtService jwt; private final SecureRandom random=new SecureRandom();
+ public AuthService(UserRepository users,RefreshTokenRepository refresh,PasswordEncoder passwords,JwtService jwt){this.users=users;this.refresh=refresh;this.passwords=passwords;this.jwt=jwt;}
+ @Transactional public AuthResponse register(String email,String password){String normalized=email.trim().toLowerCase(); if(users.findByEmailIgnoreCase(normalized).isPresent())throw new ResponseStatusException(HttpStatus.CONFLICT,"Email already registered"); return issue(users.save(new UserEntity(normalized,passwords.encode(password))));}
+ @Transactional public AuthResponse login(String email,String password){var u=users.findByEmailIgnoreCase(email.trim()).orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Invalid email or password")); if(!passwords.matches(password,u.getPasswordHash()))throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Invalid email or password"); return issue(u);}
+ @Transactional public AuthResponse rotate(String presented){var old=refresh.findByTokenHash(hash(presented)).orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Invalid refresh token")); if(!old.isActive())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Expired refresh token"); old.revoke(); return issue(old.getUser());}
+ @Transactional public void logout(String presented){refresh.findByTokenHash(hash(presented)).ifPresent(RefreshTokenEntity::revoke);}
+ private AuthResponse issue(UserEntity u){byte[] bytes=new byte[48];random.nextBytes(bytes);String token=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);refresh.save(new RefreshTokenEntity(u,hash(token),Instant.now().plus(30,ChronoUnit.DAYS)));return new AuthResponse(jwt.issue(u.getId()),token,u.getEmail());}
+ private String hash(String v){try{return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(v.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
+ public record AuthResponse(String accessToken,String refreshToken,String email){}
+}

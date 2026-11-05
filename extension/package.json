@@ -1,0 +1,16 @@
+{
+  "name": "applypilot-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ApplyPilot Chrome Extension Manifest V3",
+  "scripts": {
+    "build": "tsc --noEmit && node build.js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.6.3",
+    "vitest": "^5.1.0"
+  }
+}
