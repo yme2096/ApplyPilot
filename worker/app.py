@@ -30,8 +30,11 @@ class ExportRequest(BaseModel):
 
 def extract_text(data: bytes, filename: str) -> str:
     if filename.lower().endswith(".pdf"):
-        with fitz.open(stream=data, filetype="pdf") as document:
-            return "\n".join(page.get_text("text") for page in document)
+        try:
+            with fitz.open(stream=data, filetype="pdf") as document:
+                return "\n".join(page.get_text("text") for page in document)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="The PDF document could not be read") from exc
     try:
         document = Document(io.BytesIO(data))
         parts = [p.text for p in document.paragraphs if p.text.strip()]

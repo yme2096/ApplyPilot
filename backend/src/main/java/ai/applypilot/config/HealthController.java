@@ -40,6 +40,10 @@ public class HealthController {
         this.workerHealthUri = URI.create(workerUrl.replaceAll("/$", "") + "/health");
     }
 
+    /** Process liveness only: orchestrators must not restart the API because a dependency is briefly unavailable. */
+    @GetMapping("/api/live")
+    public Map<String, String> live() { return Map.of("status", "UP"); }
+
     @GetMapping("/api/health")
     public ResponseEntity<Map<String, String>> health() {
         var database = bounded(this::checkDatabase);

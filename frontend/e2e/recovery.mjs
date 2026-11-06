@@ -18,7 +18,7 @@ function record(name, passed, detail) {
   if (!passed) throw new Error(`${name} failed: ${detail}`);
 }
 
-async function waitForHealth(expected = 200, timeoutMs = 45_000) {
+async function waitForHealth(expected = 200, timeoutMs = 90_000) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
     try {
@@ -30,6 +30,7 @@ async function waitForHealth(expected = 200, timeoutMs = 45_000) {
   throw new Error(`API health did not reach HTTP ${expected} in time`);
 }
 
+let failure = null;
 try {
   await compose('up', '-d', '--wait', 'postgres', 'redis', 'document-worker', 'api');
   await waitForHealth();
@@ -81,8 +82,11 @@ try {
   const persisted = await request('/resumes', { headers: authorization });
   record('resume metadata remains after API restart', persisted.status === 200 && (await persisted.json()).some((resume) => resume.filename === 'recovery-synthetic.pdf'),
     `GET /resumes HTTP ${persisted.status}`);
+} catch (error) {
+  failure = error instanceof Error ? error.message : String(error);
 } finally {
   await compose('up', '-d', '--wait', 'postgres', 'redis', 'document-worker', 'api');
 }
 
-process.stdout.write(`${JSON.stringify({ environment: 'isolated ApplyPilot E2E Compose; synthetic data only', results }, null, 2)}\n`);
+process.stdout.write(`${JSON.stringify({ environment: 'isolated ApplyPilot E2E Compose; synthetic data only', results, failure }, null, 2)}\n`);
+if (failure) process.exitCode = 1;

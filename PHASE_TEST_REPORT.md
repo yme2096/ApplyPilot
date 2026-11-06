@@ -243,3 +243,42 @@ Phase 3 remains **IMPLEMENTED / IN PROGRESS**. V9 migration and bulk API are **P
 - **NOT TESTED:** Malware scanning (hook not configured), external issuer verification/Credly API, live cross-user file access, reminders in PostgreSQL, and browser visual/accessibility walkthrough.
 - The product remains in its existing phase statuses; this feature does not change Phase 3 Chrome (`NOT TESTED`) or Phase 2 live Ollama (`NOT TESTED`) status.
 - **PASS:** Final frontend production build completed successfully after correcting the mobile CSS media rule; 1,705 modules transformed and no CSS warning remained.
+
+## Production-completion continuation (2026-11-06)
+
+All tests below used the dedicated `applypilot-e2e` PostgreSQL/Redis/resume volumes and synthetic accounts/data unless explicitly labeled otherwise. The primary ApplyPilot database and volumes were not mounted, restarted, migrated, or modified.
+
+### Runtime and migration
+
+- **PASS:** Rebuilt the isolated API from current source (Spring Boot 3.5.16) and worker from current source. API, web, PostgreSQL, Redis, and worker were healthy. `GET /api/health` returned 200; the web root returned 200. The API log validated all 12 migrations and reported Flyway V12 current in `applypilot_e2e`.
+- **PASS:** Production Compose configuration parsed with synthetic placeholder values and empty temporary secret files. The GitHub Actions workflow YAML parsed; image publishing explicitly depends on the security job.
+- **NOT TESTED:** GitHub-hosted CI execution/artifact publication and public production deployment.
+
+### Authenticated browser and feature verification
+
+- **PASS:** `cd frontend; npm run test:e2e` — **7 passed** (45.6 s on final run). Scenarios covered readiness/CSP, 390/768/1280px overflow, registration/login/session refresh-expiry-logout/profile, permitted Greenhouse import/deduplication, synthetic resume upload/correction/matching/bulk preparation/ownership, application tracking/follow-up/interview/notification, and Certification Vault metadata/upload/download/ownership. No employer submission was attempted.
+- **PASS:** Certification E2E created a synthetic record (201), duplicate returned 409, invalid date returned 400, private PDF upload returned 200, metadata was owner-scoped, other-user metadata and download returned 404, and download SHA-256 matched the response integrity header; `%PDF-` signature and `%%EOF` were present. The UI displayed the saved record and candidate-provided links. Scanner status was `NOT_CONFIGURED`.
+- **PASS:** Live local Ollama test. `GET http://127.0.0.1:11434/api/tags` returned HTTP 200 and listed `qwen2.5:3b`. A temporary current-code API process used the isolated E2E database and local Ollama; a fictional resume was exported to PDF (worker 200), uploaded/parsed (API 201), and version 1 contained the exact evidence excerpt. `POST /api/answer-library/draft` returned 200, one citation pointing to that resume ID/version, and the synthetic answer: “I built a small data dashboard using Python and PostgreSQL.” Empty evidence returned 400; an unsupported team/tenure prompt returned controlled 422. AI remains disabled by default in the normal stack. No model was downloaded. Temporary API/worker processes and local temp file storage were stopped/removed; synthetic account/resume rows remain only in the isolated E2E database.
+
+### Recovery and performance
+
+- **PASS:** `cd frontend; npm run test:recovery` — **7/7 checks passed against the rebuilt worker** after raising the script's bounded cold-start wait from 45 to 90 seconds and making it print partial results on failure. The first attempt failed only because the old 45-second wait expired during a cold API start; the process subsequently became healthy. Final rerun: Redis-down auth 503 in 2076 ms; PostgreSQL-down readiness 503 in 3134 ms; worker-down resume upload 201 and resume listing 200; readiness 503 during worker outage; synthetic resume metadata remained available after API restart.
+- **PASS (measured, isolated synthetic dataset):** `cd frontend; npm run test:perf`, 250 jobs. Login 10 samples p50/p95 831.80/1397.88 ms (1.03 req/s); profile 20 samples 32.40/53.62 ms; resume metadata 20 samples 45.10/77.53 ms; job discovery 250 records 15 samples 148.40/303.30 ms; matching 20 samples 44.91/65.87 ms; 25-job bulk preparation 1423.11 ms (201); dashboard with 25 applications 15 samples 39.00/50.61 ms; aggregation SQL planning/execution 2.933/0.329 ms. Sequential local test figures only; no production capacity claim. Synthetic performance records remain in the isolated E2E volume.
+- **NOT TESTED:** Sustained concurrency, production-like dataset/host, full paired database-plus-resume-volume restore, forced network partitions, and in-flight API write interruption.
+
+### Current regression and security scans
+
+- **PASS:** `backend; mvn -B test` — **77 tests, 0 failures, 0 errors, 0 skipped** (Spring Boot 3.5.16, Java 21).
+- **PASS:** `frontend; npm test -- --run` — **5 files / 24 tests**; `npm run build` passed (1705 modules transformed).
+- **PASS:** `extension; npm test -- --run` — **20 tests**; `npm run build` passed.
+- **PASS:** Worker tests ran inside a network-disabled, read-only container using the updated requirements — **4 tests, OK**. Current worker Docker image built successfully and passed `/health`.
+- **PASS:** `npm audit --audit-level=high` returned 0 findings for frontend and extension. Initial `pip-audit --strict` found 26 advisories in `python-multipart 0.0.20` and transitive `starlette 0.46.2`. Updated pins to FastAPI 0.162.0, Starlette 1.10.0, and python-multipart 0.0.33; worker tests passed and the complete current requirements scan returned no known vulnerabilities. JSON report: ignored `security-reports/worker-pip-audit.json`.
+- **PASS / ACCEPTED RISK:** Maven Trivy's latest existing full 122-component SBOM report contains 2 Critical findings (CVE-2026-47884 and CVE-2026-47890 in Spring MVC 6.2.19), 0 High, 0 Medium, and 0 Low. They are documented with path rationale and expiry 2027-02-01; no zero-vulnerability claim is made. A new Maven dependency version was not introduced in this continuation.
+- **IMPLEMENTED / NOT TESTED:** The release workflow now runs npm audits, pip-audit, Maven Trivy policy, full test suites, and isolated E2E/performance/recovery before publishing. Local YAML parse passed; hosted GitHub Actions run remains NOT TESTED.
+
+### Remaining launch gates
+
+- **BLOCKED:** Production deployment needs an approved hosting provider/account, DNS/domain/firewall, immutable Caddy/PostgreSQL/Redis digests, private secrets, SMTP relay, encrypted off-host backup destination, monitoring/alert contact, and authorized release/migration window.
+- **BLOCKED:** Primary PostgreSQL remains V11. V12 passed only in the isolated E2E database; apply to primary only after a fresh validated paired backup and authorized maintenance window.
+- **NOT TESTED:** Control-by-control OWASP ASVS 5.0 review, independent penetration test, full paired restore, malware scanner integration, production load, hosted CI artifacts, real Chrome popup/auth/ATS/attachment, screen-reader evaluation, and external SMTP delivery.
+- Phase 3 remains **IN PROGRESS** with real Chrome/ATS checks **NOT TESTED**. Phase 5 remains **IN PROGRESS**; ApplyPilot is **NOT production-ready**.

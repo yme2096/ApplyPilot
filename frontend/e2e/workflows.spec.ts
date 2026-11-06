@@ -295,3 +295,65 @@ test('application tracking, follow-up completion, interview prep, reminders, not
   const applications = await api(page, 'GET', '/applications');
   expect((applications.data as any[])[0].status).toBe('INTERVIEW');
 });
+
+test('Certification Vault saves owner-scoped metadata and private PDF with integrity checks', async ({ page, browser }) => {
+  await register(page);
+  const payload = {
+    name: 'Synthetic Cloud Safety Credential', issuer: 'Fictional Training Lab',
+    issueDate: '2026-01-15', expirationDate: '2027-01-15', credentialId: `SYN-${randomUUID()}`,
+    officialVerificationUrl: 'https://issuer.example.test/verify/synthetic',
+    credlyBadgeUrl: 'https://www.credly.com/badges/synthetic', scoreResult: 'Pass',
+    candidateVerified: false, reminderDays: [90, 30, 7]
+  };
+  const created = await api(page, 'POST', '/certifications', payload);
+  expect(created.status).toBe(201);
+  const certification = created.data as any;
+  expect(certification.expirationStatus).toBe('ACTIVE');
+  expect(certification.candidateVerified).toBe(false);
+  expect(certification.linksCandidateProvided).toBe(true);
+  expect(certification.certificateFileName).toBeNull();
+
+  const duplicate = await api(page, 'POST', '/certifications', payload);
+  expect(duplicate.status).toBe(409);
+  const invalidDates = await api(page, 'POST', '/certifications', {
+    name: 'Synthetic Invalid Date', issueDate: '2026-08-01', expirationDate: '2026-07-01'
+  });
+  expect(invalidDates.status).toBe(400);
+
+  const pdf = syntheticPdf();
+  const uploaded = await api(page, 'POST', `/certifications/${certification.id}/file`, undefined, {
+    name: 'synthetic-certificate.pdf', mimeType: 'application/pdf', data: Array.from(pdf)
+  });
+  expect(uploaded.status).toBe(200);
+  expect((uploaded.data as any).certificateFileName).toBe('synthetic-certificate.pdf');
+  expect((uploaded.data as any).malwareScanStatus).toBe('NOT_CONFIGURED');
+  const list = await api(page, 'GET', '/certifications');
+  expect(list.status).toBe(200);
+  expect((list.data as any[]).some((item) => item.id === certification.id)).toBeTruthy();
+
+  const integrity = await page.evaluate(async (id) => {
+    const token = sessionStorage.getItem('accessToken');
+    const response = await fetch(`/api/certifications/${id}/file`, { headers: { Authorization: `Bearer ${token}` } });
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((n) => n.toString(16).padStart(2, '0')).join('');
+    const text = new TextDecoder().decode(bytes);
+    return { status: response.status, type: response.headers.get('content-type'), expectedHash: response.headers.get('x-content-sha256'), hash, size: bytes.length, pdfHeader: text.startsWith('%PDF-'), pdfFooter: text.trimEnd().endsWith('%%EOF') };
+  }, certification.id);
+  expect(integrity.status).toBe(200);
+  expect(integrity.type).toContain('application/pdf');
+  expect(integrity.size).toBeGreaterThan(0);
+  expect(integrity.pdfHeader && integrity.pdfFooter).toBeTruthy();
+  expect(integrity.hash).toBe(integrity.expectedHash);
+
+  await page.getByRole('button', { name: 'Certification Vault' }).click();
+  await expect(page.getByRole('heading', { name: 'Synthetic Cloud Safety Credential' })).toBeVisible();
+  await expect(page.getByText('(candidate-provided)').first()).toBeVisible();
+
+  const context = await browser.newContext({ baseURL: process.env.APPLYPILOT_E2E_WEB ?? 'http://localhost:15174' });
+  const other = await context.newPage();
+  await register(other, emailFor('cert-other'));
+  expect((await api(other, 'GET', `/certifications/${certification.id}`)).status).toBe(404);
+  const deniedFile = await api(other, 'GET', `/certifications/${certification.id}/file`);
+  expect(deniedFile.status).toBe(404);
+  await context.close();
+});

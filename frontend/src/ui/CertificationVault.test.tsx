@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mocks=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),put:vi.fn(),delete:vi.fn()}));
@@ -29,20 +29,20 @@ describe('CertificationVault',()=>{
   it('creates certification details through the vault API without asserting issuer verification',async()=>{
     const user=userEvent.setup();
     render(<CertificationVault/>);
-    await user.type(screen.getByLabelText('Certification name'), 'Synthetic Security Credential');
-    await user.type(screen.getByLabelText('Issuing organization'), 'Fictional Issuer');
-    await user.type(screen.getByLabelText('Credential ID'), 'SYN-2026-1');
+    fireEvent.change(screen.getByLabelText('Certification name'), { target: { value: 'Synthetic Security Credential' } });
+    fireEvent.change(screen.getByLabelText('Issuing organization'), { target: { value: 'Fictional Issuer' } });
+    fireEvent.change(screen.getByLabelText('Credential ID'), { target: { value: 'SYN-2026-1' } });
     await user.click(screen.getByRole('button',{name:'Save certification'}));
     await waitFor(()=>expect(mocks.post).toHaveBeenCalledWith('/certifications',expect.objectContaining({name:'Synthetic Security Credential',issuer:'Fictional Issuer',credentialId:'SYN-2026-1',candidateVerified:false,reminderDays:[90,30,7]})));
     expect(await screen.findByText('Certification saved. Links remain candidate-provided until independently verified.')).toBeTruthy();
-  });
+  }, 10_000);
 
   it('shows API validation errors without clearing the candidate form',async()=>{
     mocks.post.mockRejectedValue({response:{data:{message:'Expiration date must be on or after the issue date.'}}});
     const user=userEvent.setup();render(<CertificationVault/>);
-    await user.type(screen.getByLabelText('Certification name'),'Bad date fixture');
+    fireEvent.change(screen.getByLabelText('Certification name'), { target: { value: 'Bad date fixture' } });
     await user.click(screen.getByRole('button',{name:'Save certification'}));
     expect(await screen.findByText('Expiration date must be on or after the issue date.')).toBeTruthy();
     expect((screen.getByLabelText('Certification name') as HTMLInputElement).value).toBe('Bad date fixture');
-  });
+  }, 10_000);
 });

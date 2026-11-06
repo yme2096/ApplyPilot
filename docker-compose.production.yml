@@ -1,0 +1,204 @@
+name: applypilot-production
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  edge:
+    image: ${APPLYPILOT_CADDY_IMAGE:?Set Caddy to a verified immutable image digest}
+    restart: unless-stopped
+    environment:
+      APPLYPILOT_DOMAIN: ${APPLYPILOT_DOMAIN:?Set a domain whose DNS points to this host}
+      ACME_EMAIL: ${ACME_EMAIL:?Set an operational certificate contact email}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
+    logging: *default-logging
+
+  web:
+    image: ${APPLYPILOT_WEB_IMAGE:?Set an immutable frontend image digest}
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [edge, backend]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=8m
+      - /tmp:size=16m
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
+    logging: *default-logging
+
+  api:
+    image: ${APPLYPILOT_API_IMAGE:?Set an immutable backend image digest}
+    restart: unless-stopped
+    stop_grace_period: 45s
+    environment:
+      SPRING_CONFIG_IMPORT: configtree:/run/secrets/
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Set database name}
+      POSTGRES_USER: ${POSTGRES_USER:?Set database username}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SERVER_PORT: "8080"
+      UPLOAD_DIR: /app/data/uploads
+      WORKER_URL: http://document-worker:8000
+      APP_ORIGIN: https://${APPLYPILOT_DOMAIN:?Set domain}
+      APP_RATE_LIMIT_ENABLED: "true"
+      APP_RATE_LIMIT_AUTH_MAX: ${APP_RATE_LIMIT_AUTH_MAX:-20}
+      APP_RATE_LIMIT_IMPORT_MAX: ${APP_RATE_LIMIT_IMPORT_MAX:-30}
+      APP_RATE_LIMIT_AI_MAX: ${APP_RATE_LIMIT_AI_MAX:-10}
+      APP_RATE_LIMIT_WINDOW_SECONDS: ${APP_RATE_LIMIT_WINDOW_SECONDS:-60}
+      REDIS_CONNECT_TIMEOUT: 2s
+      REDIS_COMMAND_TIMEOUT: 2s
+      DB_CONNECTION_TIMEOUT_MS: "3000"
+      DB_VALIDATION_TIMEOUT_MS: "1000"
+      APP_WORKER_CONNECT_TIMEOUT_SECONDS: "3"
+      APP_WORKER_REQUEST_TIMEOUT_SECONDS: "45"
+      LLM_PROVIDER: none
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:?Set an SMTP relay for account recovery}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_STARTTLS: "true"
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError
+    secrets:
+      - source: postgres_password
+        target: spring.datasource.password
+      - source: jwt_secret
+        target: app.jwt-secret
+      - source: redis_password
+        target: spring.data.redis.password
+      - source: smtp_username
+        target: spring.mail.username
+      - source: smtp_password
+        target: spring.mail.password
+    volumes:
+      - resume_data:/app/data/uploads
+    networks: [backend, egress]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      document-worker: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "ai.applypilot.config.HealthProbe"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 45s
+    mem_limit: 1g
+    cpus: 1.50
+    pids_limit: 256
+    logging: *default-logging
+
+  postgres:
+    image: ${APPLYPILOT_POSTGRES_IMAGE:?Set PostgreSQL to a verified immutable image digest}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set database name}
+      POSTGRES_USER: ${POSTGRES_USER:?Set database username}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    shm_size: 256m
+    mem_limit: 2g
+    cpus: 2.00
+    pids_limit: 256
+    logging: *default-logging
+
+  redis:
+    image: ${APPLYPILOT_REDIS_IMAGE:?Set Redis to a verified immutable image digest}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--aclfile", "/run/secrets/redis_acl"]
+    secrets:
+      - redis_acl
+      - redis_password
+    volumes:
+      - redis_data:/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    cpus: 0.50
+    pids_limit: 128
+    logging: *default-logging
+
+  document-worker:
+    image: ${APPLYPILOT_WORKER_IMAGE:?Set an immutable worker image digest}
+    restart: unless-stopped
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 4s
+      retries: 5
+      start_period: 15s
+    mem_limit: 768m
+    cpus: 1.00
+    pids_limit: 128
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+    name: applypilot-prod-postgres
+  redis_data:
+    name: applypilot-prod-redis
+  resume_data:
+    name: applypilot-prod-resumes
+  caddy_data:
+    name: applypilot-prod-caddy-data
+  caddy_config:
+    name: applypilot-prod-caddy-config
+
+networks:
+  edge: {}
+  backend:
+    internal: true
+  egress: {}
+
+secrets:
+  postgres_password:
+    file: ${APPLYPILOT_SECRETS_DIR:?Set a private secrets directory}/postgres_password
+  jwt_secret:
+    file: ${APPLYPILOT_SECRETS_DIR:?Set a private secrets directory}/jwt_secret
+  redis_password:
+    file: ${APPLYPILOT_SECRETS_DIR:?Set a private secrets directory}/redis_password
+  redis_acl:
+    file: ${APPLYPILOT_SECRETS_DIR:?Set a private secrets directory}/redis_acl
+  smtp_username:
+    file: ${APPLYPILOT_SECRETS_DIR:?Set a private secrets directory}/smtp_username
+  smtp_password:
+    file: ${APPLYPILOT_SECRETS_DIR:?Set a private secrets directory}/smtp_password

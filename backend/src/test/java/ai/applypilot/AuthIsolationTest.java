@@ -36,6 +36,12 @@ class AuthIsolationTest {
         return resp.getBody().accessToken();
     }
 
+    @Test void liveness_is_anonymous_and_does_not_depend_on_backing_services() {
+        var response = rest.getForEntity(base() + "/api/live", String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains("UP");
+    }
+
     @Test void unauthenticated_profile_returns_401_or_403() {
         var resp = rest.getForEntity(base() + "/api/profile", String.class);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

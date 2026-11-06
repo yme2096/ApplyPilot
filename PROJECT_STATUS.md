@@ -1,6 +1,6 @@
 # ApplyPilot AI — Project Status
 
-Updated: 2026-11-03
+Updated: 2026-11-06
 
 ## Verified implementation inventory
 
@@ -10,17 +10,17 @@ Updated: 2026-11-03
 - Resume APIs support PDF/DOCX upload, worker parsing/evidence, original file download, review/version creation, tailoring, and PDF/DOCX exports.
 - Public job import/matching, saved jobs, application bundles, optional Ollama-backed question/answer drafting with template/manual fallback, and an evidence-backed reusable answer library exist. Job/match/bundle and answer-library flows were exercised against Compose. The MV3 extension now has a tested local preparation milestone; browser installation and live portal behavior remain unverified.
 - Database history was inspected before migration changes. Existing versions 1–5 were preserved; duplicate migration versions were resolved with forward-only V6 and V7 migrations, which applied successfully to the existing database.
-- Local Compose is running at `http://localhost:5174` (web), `http://localhost:8081` (API), `http://localhost:5433` (PostgreSQL), `http://localhost:6379` (Redis), and `http://localhost:8000` (document worker). `.env` contains a generated local JWT secret and is ignored by Git; SMTP remains unconfigured.
+- The guarded primary local stack has previously run at `http://localhost:5174` (web), `http://localhost:8081` (API), `http://localhost:5433` (PostgreSQL), `http://localhost:6379` (Redis), and `http://localhost:8000` (document worker). This continuation used a distinct `applypilot-e2e` stack and ports 15174/18081 with dedicated test volumes; primary data volumes were not mounted or changed. SMTP remains unconfigured.
 
 ## Phase status
 
 | Phase | Status | Notes |
 |---|---|---|
 | 1. Foundation, authentication, profile and resume intelligence | COMPLETED | Profile CRUD, PDF/DOCX parse, evidence, immutable review, exports, migrations, and backend regression coverage are verified. Password-reset configured-sender flow passed with a test sender; real SMTP delivery remains environment-blocked. |
-| 2. Job discovery and AI intelligence | IN PROGRESS | Live public Greenhouse single-job URL and We Work Remotely RSS imports passed, repeated imports were deduplicated, source/retrieval metadata persisted, and imported records survived an API restart. URL failure handling, frontend tests/build, and backend isolation regression passed. Ollama is configured as an optional local provider with default model `qwen2.5:3b` and AI disabled by default; live generation remains BLOCKED because Ollama/model are not installed. |
+| 2. Job discovery and AI intelligence | IMPLEMENTED / PASS (core acceptance) | Live Greenhouse/RSS imports, source metadata, duplicate detection, persistence, ownership, matching, eligibility, company sources, and evidence-grounded answer generation passed. On 2026-11-06 a synthetic resume answer generated through the real local Ollama `qwen2.5:3b` provider returned HTTP 200 with the exact resume version citation; missing evidence returned 400 and an unsupported-claim prompt returned controlled 422. AI remains disabled by default. |
 | 3. Application automation | IMPLEMENTED / IN PROGRESS | V9 is applied and the running API now supports atomic multi-job DRAFT preparation with persisted batch IDs. Live HTTP checks passed for bulk create/list/detail, answer/note edits, per-version approval, READY transition, duplicate rejection, cancellation, retry, and cross-user isolation; data survived an API restart. Backend 55 tests, frontend 7 tests/build, and extension 20 tests/build PASS. Real Chrome and ATS behavior remain NOT TESTED. |
-| 4. Application intelligence | IMPLEMENTED / IN PROGRESS | V10/V11 are applied. Earlier live API/PostgreSQL checks passed for snapshots, ownership, duplicate prevention, status confirmation, metrics, follow-ups, interview prep, skill gaps, and notifications. Dashboard component/API-mock coverage is now 11 tests; full frontend suite is 20. Live browser walkthrough and Ollama generation remain NOT TESTED. |
-| 5. Integration, security, testing and deployment | IN PROGRESS | Local runtime safely recovered after inspection; V11/data preserved; Redis-backed throttling, CSP/security headers, loopback Compose ports, required DB password, and patched frontend test tooling implemented and verified. Production gaps remain; not production-ready. |
+| 4. Application intelligence | IMPLEMENTED / IN PROGRESS | V10/V11 are applied to the primary database. Prior live checks passed for snapshots, ownership, status confirmation, metrics, follow-ups, interview prep, skill gaps, and notifications. Isolated Playwright checks now cover application/follow-up/interview/notification flows. Actual-device visual and assistive-technology review remains NOT TESTED. |
+| 5. Integration, security, testing and deployment | IN PROGRESS | Current isolated Playwright E2E 7/7, recovery checks 7/7, 250-job performance run, backend 77/77, frontend 24/24 + build, extension 20/20 + build, and worker 4/4 passed. Python dependency scan remediated 26 advisories to zero; Maven still has 2 documented Spring findings. Production profile and security CI are prepared but not hosted/deployed; full paired restore, ASVS audit, monitoring, and external rollout remain open. Not production-ready. |
 
 ## Changes in this continuation
 
@@ -133,3 +133,12 @@ See `PHASE_TEST_REPORT.md`, `PHASE5_READINESS_AUDIT.md`, `SECURITY.md`, and `DEP
 - Existing primary certifications were previously read-only inspected as 0 rows; no primary data or volume was changed during implementation.
 - **NOT TESTED:** Actual malware scanning (default hook reports `NOT_CONFIGURED`), external issuer/Credly verification, live API authorization/file round-trip, V12 application against the primary PostgreSQL, and a visual walkthrough.
 - Four existing certifications: add individually from the Certification Vault screen after V12 activation; instructions are in the final report.
+
+## Full production-completion continuation (2026-11-06)
+
+- **PASS:** Current isolated application stack validated Flyway V12; live Certification Vault and PDF ownership/integrity checks passed. Primary database remains V11 and untouched.
+- **PASS:** Isolated Playwright suite **7/7**, recovery suite **7/7**, current backend **77/77**, frontend **24/24** plus production build, extension **20/20** plus build, worker **4/4**, npm audits (web/extension zero), Python pip-audit (zero after upgrades), production Compose config parse, and workflow YAML parse.
+- **PASS:** Synthetic evidence-grounded generation used the actual local Ollama `qwen2.5:3b` model and produced a cited answer; missing evidence and unsupported claim behavior were controlled. No model was downloaded; AI remains disabled by default in the standard stack.
+- **PASS:** 250-job isolated performance measurements and Redis/PostgreSQL/worker/API recovery are recorded in `PHASE_TEST_REPORT.md`.
+- **ACCEPTED SECURITY RISK:** Maven Trivy still reports two documented Spring MVC findings, including one Trivy-critical advisory; exceptions expire 2027-02-01. The report is not clean.
+- **BLOCKED / NOT TESTED:** ApplyPilot is not deployed. External hosting, domain/DNS, SMTP, secret-management, monitoring, encrypted off-host backup, full paired restore, ASVS 5.0 control assessment, independent penetration test, and primary V12 migration window are outstanding. Phase 3 real Chrome/ATS/attachment and actual-device/screen-reader checks remain NOT TESTED. Phase 5 remains IN PROGRESS; ApplyPilot is NOT production-ready.

@@ -34,7 +34,7 @@ public class SecurityConfig {
     }
     @Bean SecurityFilterChain filterChain(HttpSecurity http, JwtAuthFilter jwt, ApiRateLimitFilter rateLimit) throws Exception {
         return http.csrf(c -> c.disable()).cors(c -> {}).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(a -> a.requestMatchers("/api/auth/**", "/api/health", "/error").permitAll()
+            .authorizeHttpRequests(a -> a.requestMatchers("/api/auth/**", "/api/health", "/api/live", "/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll().anyRequest().authenticated())
             .exceptionHandling(e -> e
                 .authenticationEntryPoint((request, response, exception) -> {
